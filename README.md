@@ -379,6 +379,109 @@ The changes this global edition adds on top of upstream ARTEX are tracked in the
 
 ---
 
+## Verify (end-to-end checks of this UI)
+
+[Verify](https://github.com/RevylAI/verify) (`@revyl/verify`) drives this Artex
+web UI in a real Revyl cloud browser and asserts what actually happens on
+screen. This repo ships a ready-to-run check that signs in, starts **one bounded
+Artex run against a local sandbox you own**, and verifies the run genuinely
+progresses — the agents act and Artex surfaces a finding — not just that a page
+rendered.
+
+> **Authorized use.** The check points Artex **only** at a local, isolated,
+> deliberately-vulnerable target you own (OWASP Juice Shop on the same machine,
+> reached as `http://juice-shop:3000`). Never point Artex at any external or
+> third-party host. This is Artex's own rule — see the authorized-use notice at
+> the top of this README.
+
+### Files
+
+| Path | What it is |
+| --- | --- |
+| `verify.config.ts` | The Verify web target `artex`. Reads the Artex URL from `ARTEX_BASE_URL` and the Revyl web app id from `REVYL_WEB_APP_ID` — nothing environment-specific is committed. |
+| `.revyl/config.yaml` | Revyl project config: `project.id` plus the `signed-in` session profile. |
+| `.revyl/scripts/sign-in.sh` | The session-profile script Revyl runs on its hosted runner to sign a web session in (mints an Artex token from `/api/auth/login` and writes browser storage state). |
+| `verify/artex-pentest.mts` | The example check. |
+
+### 1. Bring up Artex + a local sandbox + an LLM
+
+Start Artex ([Quick start](#quick-start-docker-compose)). Give it a local target
+and an LLM:
+
+```bash
+# A local, isolated target you own, on Artex's own Docker network:
+docker run -d --name juice-shop \
+  --network artex-global_default --network-alias juice-shop \
+  bkimminich/juice-shop:latest
+```
+
+Configure the LLM with environment variables (never commit keys). The default is
+Anthropic; any OpenAI-compatible endpoint works too:
+
+| Variable | Meaning |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | Anthropic key (the default provider). |
+| `OPENAI_API_KEY` | OpenAI (or any OpenAI-compatible) key. |
+| `ARTEX_LLM_PROVIDER` / `ARTEX_LLM_MODEL` / `ARTEX_LLM_BASE_URL` | Select the provider, model, and (for OpenAI-compatible endpoints) base URL. |
+| `ARTEX_ADMIN_PASSWORD` | Sets the single `ARTEX` admin password without the `/setup` step (8+ chars). The check signs in with it. |
+
+> **LLM provider notes — so the next person isn't surprised:**
+>
+> - A **managed or gateway `ANTHROPIC_API_KEY`** may not authenticate directly
+>   against `api.anthropic.com` (it can return `401 invalid x-api-key`). When
+>   that happens Artex can't call Anthropic directly — use a raw Anthropic key,
+>   or an OpenAI-compatible endpoint via `ARTEX_LLM_BASE_URL`.
+> - Some **OpenAI-compatible reasoning models** (for example Cerebras
+>   `gpt-oss-120b`) return a `reasoning_content` field that Artex replays on the
+>   next turn, and the endpoint then rejects it with `400 wrong_api_format`. Put
+>   a tiny proxy in front that strips `reasoning_content`, `reasoning`, and
+>   `thinking` from the request, and point `ARTEX_LLM_BASE_URL` at it.
+>   Non-streaming alone does not fix this, and `thinking_type: disabled` just
+>   sends an unsupported `thinking` field.
+
+### 2. Expose the UI so Revyl's browser can reach it
+
+Revyl's cloud browser can't reach `localhost`, so publish the Artex UI at a
+public HTTPS URL (a tunnel/preview such as `cloudflared`, `ngrok`, or your own)
+and use that as `ARTEX_BASE_URL`.
+
+### 3. Create a Revyl web app and run the check
+
+```bash
+npm i @revyl/verify
+revyl app create --name "Artex" --platform web   # copy the app id
+
+export REVYL_API_KEY=...                 # your Revyl org API key
+export REVYL_WEB_APP_ID=<app-id>
+export ARTEX_BASE_URL=https://<your-public-artex-url>
+export ARTEX_ADMIN_PASSWORD=<the Artex admin password>
+# optional — target Revyl staging instead of production:
+#   export REVYL_BACKEND_URL=https://backend-staging.revyl.ai
+#   export REVYL_APP_URL=https://staging.revyl.ai
+node verify/artex-pentest.mts
+```
+
+The check prints its Revyl session link, signs in, starts the bounded Artex run
+against the local sandbox, and asserts a finding (or report) appears, then closes
+the session.
+
+### Signing in with a session profile (optional)
+
+By default the check signs in through the UI with `ARTEX_ADMIN_PASSWORD`. To use
+the hosted `signed-in` session profile in `.revyl/config.yaml` instead, store the
+admin password as a Revyl org secret and run with `ARTEX_PROFILE=signed-in`:
+
+```bash
+revyl global var set ARTEX_ADMIN_PASSWORD --readable-by-automated-runs
+ARTEX_PROFILE=signed-in node verify/artex-pentest.mts
+```
+
+Revyl runs session profiles for API starts only where the backend supports it;
+otherwise `open()` falls back to opening without one and the check's UI sign-in
+takes over.
+
+---
+
 ## License and disclaimer
 
 ### Open-source license

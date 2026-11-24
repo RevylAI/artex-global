@@ -1,0 +1,30 @@
+# Revyl project configuration for the Artex fork.
+#
+# This file wires Revyl / Verify to Artex's own web UI so the app can be
+# verified with Verify (https://github.com/RevylAI/verify). It is used ONLY to
+# drive and assert against Artex's own interface — never to launch an Artex scan
+# against anything but a local, isolated sandbox you own (see the README's
+# "Verify" section and this repository's authorized-use notice).
+#
+# The Artex base URL is NOT stored here. Verify reads it from the ARTEX_BASE_URL
+# environment variable in verify.config.ts, so no tunnel/preview URL is ever
+# committed.
+
+project:
+  # A Revyl project in the organization whose REVYL_API_KEY you run Verify with.
+  # Replace with your own project id (`revyl init` writes one), or override at
+  # runtime: session profiles need it only when you pass `profile`.
+  id: eeddaca2-6649-4b70-9a8f-1cb61e89ef66
+
+session:
+  idle_timeout_seconds: 600
+  # Artex has a single admin login (user "ARTEX"). This profile signs a Verify
+  # web session in before the first step, so open('web', { profile: 'signed-in' })
+  # starts on the dashboard instead of the login page. Revyl runs the script on
+  # its hosted runner; it reads the admin password from a Revyl org secret
+  # (ARTEX_ADMIN_PASSWORD) and writes browser storage state. See
+  # .revyl/scripts/sign-in.sh and the README's "Verify" section.
+  default_profile: signed-in
+  profiles:
+    signed-in:
+      script: scripts/sign-in.sh
