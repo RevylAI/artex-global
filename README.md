@@ -425,11 +425,19 @@ Anthropic; any OpenAI-compatible endpoint works too:
 | `ARTEX_LLM_PROVIDER` / `ARTEX_LLM_MODEL` / `ARTEX_LLM_BASE_URL` | Select the provider, model, and (for OpenAI-compatible endpoints) base URL. |
 | `ARTEX_ADMIN_PASSWORD` | Sets the single `ARTEX` admin password without the `/setup` step (8+ chars). The check signs in with it. |
 
-> Some OpenAI-compatible reasoning models return a `reasoning_content` field that
-> Artex replays on the next turn and the endpoint then rejects. If you hit
-> `wrong_api_format`, put a tiny proxy in front that strips `reasoning_content`,
-> `reasoning`, and `thinking` from the request, and point `ARTEX_LLM_BASE_URL`
-> at it.
+> **LLM provider notes — so the next person isn't surprised:**
+>
+> - A **managed or gateway `ANTHROPIC_API_KEY`** may not authenticate directly
+>   against `api.anthropic.com` (it can return `401 invalid x-api-key`). When
+>   that happens Artex can't call Anthropic directly — use a raw Anthropic key,
+>   or an OpenAI-compatible endpoint via `ARTEX_LLM_BASE_URL`.
+> - Some **OpenAI-compatible reasoning models** (for example Cerebras
+>   `gpt-oss-120b`) return a `reasoning_content` field that Artex replays on the
+>   next turn, and the endpoint then rejects it with `400 wrong_api_format`. Put
+>   a tiny proxy in front that strips `reasoning_content`, `reasoning`, and
+>   `thinking` from the request, and point `ARTEX_LLM_BASE_URL` at it.
+>   Non-streaming alone does not fix this, and `thinking_type: disabled` just
+>   sends an unsupported `thinking` field.
 
 ### 2. Expose the UI so Revyl's browser can reach it
 
